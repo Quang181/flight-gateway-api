@@ -1,0 +1,10 @@
+{
+  "authorized": "Xac thuc thanh cong",
+  "bad_request": "Yeu cau khong hop le",
+  "unauthorized": "Khong duoc xac thuc",
+  "forbidden": "Khong co quyen truy cap",
+  "not_found": "Khong tim thay tai nguyen",
+  "validation_error": "Du lieu khong hop le",
+  "internal_server_error": "Loi he thong noi bo",
+  "unknown_error": "Loi khong xac dinh"
+}
