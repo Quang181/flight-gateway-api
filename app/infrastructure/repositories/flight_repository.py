@@ -13,6 +13,15 @@ class MockTravelFlightRepository(FlightRepository):
     async def search_flights(self, criteria: dict[str, Any]) -> dict[str, Any]:
         return await self._api_client.search_flights(criteria)
 
+    async def get_offer_detail(self, offer_id: str) -> dict[str, Any]:
+        return await self._api_client.get_offer_detail(offer_id)
+
+    async def create_booking(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return await self._api_client.create_booking(payload)
+
+    async def get_booking(self, reference: str) -> dict[str, Any]:
+        return await self._api_client.get_booking(reference)
+
     async def get(self, key: str) -> dict[str, Any] | None:
         return await self._cache.get(key)
 
