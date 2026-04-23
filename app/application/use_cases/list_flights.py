@@ -3,6 +3,7 @@ import json
 from typing import Any
 
 from app.application.common.constant import FLIGHT_SEARCH_CACHE_KEY_PREFIX
+from app.application.common.legacy_normalization import normalize_flight_item
 from app.application.common.pagination import Pagination
 from app.domain.ports.flight_repository import FlightRepository
 
@@ -43,7 +44,7 @@ class ListFlights:
         return f"{FLIGHT_SEARCH_CACHE_KEY_PREFIX}:{digest}"
 
     def _paginate_result(self, result: dict[str, Any] | list[Any], page: int, page_size: int) -> dict[str, Any]:
-        items = self._extract_items(result)
+        items = [normalize_flight_item(item) if isinstance(item, dict) else item for item in self._extract_items(result)]
         paginated = self._pagination.paginate(items, page, page_size)
         metadata = self._extract_metadata(result)
         return {
