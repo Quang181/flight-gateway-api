@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     app_port: int = 8000
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/flight_gateway"
     redis_url: str = "redis://localhost:6379/0"
+    mock_travel_api_url: str = "https://mock-travel-api.vercel.app"
+    flight_search_cache_ttl_seconds: int = 300
     auth_header_name: str = "X-API-Token"
     auth_token: str = "change-me"
 
