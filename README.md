@@ -20,10 +20,14 @@ This project follows a simple hexagonal architecture. The code is split into `do
 app/
 ├── bootstrap.py
 ├── application/
+│   ├── common/
+│   │   └── constant.py
 │   └── use_cases/
-│       └── get_health_status.py
+│       ├── get_health_status.py
+│       └── list_flights.py
 ├── domain/
 │   └── ports/
+│       ├── flight_repository.py
 │       └── health_repository.py
 ├── entrypoints/
 │   └── api/
@@ -33,11 +37,21 @@ app/
 │           └── auth.py
 │       └── routers/
 │           ├── __init__.py
+│           ├── flight/
+│           │   ├── __init__.py
+│           │   └── list/
+│           │       ├── __init__.py
+│           │       ├── router.py
+│           │       └── schema.py
 │           └── system/
 │               ├── __init__.py
 │               ├── health.py
 │               └── secure.py
 └── infrastructure/
+    ├── apicall/
+    │   ├── __init__.py
+    │   ├── base.py
+    │   └── flight_search.py
     ├── lifecycle.py
     ├── cache/
     │   └── redis.py
@@ -52,15 +66,23 @@ app/
 ### File Purpose
 
 - `app/bootstrap.py`: creates the FastAPI app, registers middleware, routes, and lifespan handling.
+- `app/application/common/constant.py`: shared constants for the application layer, such as reusable regex patterns.
 - `app/application/use_cases/get_health_status.py`: use case layer. Contains the logic for reading dependency health status from an abstract repository.
+- `app/application/use_cases/list_flights.py`: use case for searching flights through the outbound flight repository port.
+- `app/domain/ports/flight_repository.py`: domain contract for outbound flight search integrations.
 - `app/domain/ports/health_repository.py`: domain contract. Defines the interface that infrastructure must implement.
 - `app/entrypoints/api/routers/__init__.py`: router aggregator. Combines router groups into one `api_router`.
+- `app/entrypoints/api/routers/flight/__init__.py`: declares the shared flight router group and includes child routers.
+- `app/entrypoints/api/routers/flight/list/schema.py`: request query schema for the `GET /flight` endpoint.
+- `app/entrypoints/api/routers/flight/list/router.py`: flight list endpoint that validates query params and dispatches to the use case.
 - `app/entrypoints/api/routers/system/__init__.py`: declares the shared `APIRouter(tags=["system"])` for the whole system group and imports endpoint modules in that group.
 - `app/entrypoints/api/routers/system/health.py`: system endpoints related to health checks such as `/health`. This file reuses the shared router from the same folder.
 - `app/entrypoints/api/routers/system/secure.py`: protected system endpoints such as `/secure/ping`. This file also reuses the shared router from the same folder.
 - `app/entrypoints/api/dependencies.py`: FastAPI dependency wiring. Builds use case instances from objects stored in `app.state`.
 - `app/entrypoints/api/decorators.py`: route-level decorators, currently used to mark endpoints that require token authentication.
 - `app/entrypoints/api/middlewares/auth.py`: request middleware that checks the configured token for protected endpoints.
+- `app/infrastructure/apicall/base.py`: reusable base HTTP client for outbound API adapters.
+- `app/infrastructure/apicall/flight_search.py`: concrete outbound adapter for the mock travel flight search API.
 - `app/infrastructure/config/settings.py`: loads and validates configuration from `env.yaml`.
 - `app/infrastructure/lifecycle.py`: startup and shutdown flow. Initializes PostgreSQL, Redis, and shared app state.
 - `app/infrastructure/db/postgres.py`: PostgreSQL connection manager and health check implementation.
@@ -75,8 +97,8 @@ app/
 4. `app/entrypoints/api/routers/<group>/__init__.py` defines the shared router for a tag group.
 5. Endpoint files inside the same router group import that shared router and register their own paths.
 6. `app/entrypoints/api/dependencies.py` builds use cases for the route.
-7. `app/application/use_cases/get_health_status.py` calls the repository through the domain port.
-8. `app/infrastructure/repositories/health_repository.py` talks to PostgreSQL and Redis through the infrastructure managers.
+7. `app/application/use_cases/*.py` orchestrate business flow through domain ports.
+8. `app/infrastructure/repositories/*.py` and `app/infrastructure/apicall/*.py` implement those ports for databases, cache, and external APIs.
 
 ## Environment
 
@@ -87,7 +109,7 @@ flight_gateway:
   app_name: flight-gateway-api
   app_host: 0.0.0.0
   app_port: 8000
-  database_url: postgresql+asyncpg://postgres:postgres@localhost:5432/flight_gateway
+  database_url: postgresql+asyncpg://postgres@localhost:5432/flight_gateway
   redis_url: redis://localhost:6379/0
   auth_header_name: X-API-Token
   auth_token: change-me
@@ -104,6 +126,39 @@ flight_gateway:
 - `auth_token`: expected token value for protected routes.
 
 ## Run
+
+### Start PostgreSQL And Redis
+
+Run local dependencies with Docker Compose:
+
+```bash
+docker compose up -d
+```
+
+This starts:
+
+- PostgreSQL at `localhost:5432`
+- Redis at `localhost:6379`
+
+The PostgreSQL container is configured for local development without a password, so `database_url` can be:
+
+```yaml
+database_url: postgresql+asyncpg://postgres@localhost:5432/flight_gateway
+```
+
+To stop the containers:
+
+```bash
+docker compose down
+```
+
+To stop and remove persisted data volumes:
+
+```bash
+docker compose down -v
+```
+
+### Start The API
 
 ```bash
 poetry install
