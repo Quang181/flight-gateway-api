@@ -8,7 +8,11 @@ ERROR_MESSAGE_KEYS: dict[int, str] = {
     401: "unauthorized",
     403: "forbidden",
     404: "not_found",
+    429: "too_many_requests",
     422: "validation_error",
+    502: "bad_gateway",
+    503: "service_unavailable",
+    504: "gateway_timeout",
     500: "internal_server_error",
 }
 
@@ -21,10 +25,13 @@ def get_default_error_message(status_code: int, accept_language: str | None = No
 def error_response(
     status_code: int,
     message: str | None = None,
+    message_key: str | None = None,
     accept_language: str | None = None,
 ) -> JSONResponse:
     payload = {
         "status_code": status_code,
-        "message": message or get_default_error_message(status_code, accept_language),
+        "message": message or translate(message_key, accept_language)
+        if message_key
+        else get_default_error_message(status_code, accept_language),
     }
     return JSONResponse(status_code=status_code, content=payload)
