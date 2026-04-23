@@ -8,6 +8,18 @@ class FlightRepository(ABC):
         """Search flights from an external provider."""
 
     @abstractmethod
+    async def get_offer_detail(self, offer_id: str) -> dict[str, Any]:
+        """Retrieve offer details from an external provider."""
+
+    @abstractmethod
+    async def create_booking(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Create a booking with an external provider."""
+
+    @abstractmethod
+    async def get_booking(self, reference: str) -> dict[str, Any]:
+        """Retrieve a booking from an external provider."""
+
+    @abstractmethod
     async def get(self, key: str) -> dict[str, Any] | None:
         """Get cached flight search result by key."""
 
