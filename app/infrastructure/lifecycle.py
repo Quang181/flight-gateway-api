@@ -22,6 +22,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     redis = RedisManager(settings.redis_url)
     flight_api_client = MockTravelFlightApiClient(
         base_url=settings.mock_travel_api_url,
+        timeout=settings.legacy_api_timeout_seconds,
+        max_retries=settings.legacy_api_retry_count,
+        backoff_seconds=settings.legacy_api_backoff_seconds,
         default_headers={"accept": "application/json", "Content-Type": "application/json"},
     )
     flight_cache = FlightRedisCache(redis=redis)
