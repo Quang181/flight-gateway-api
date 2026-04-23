@@ -14,10 +14,9 @@ sqlalchemy = "^2.0.43"
 asyncpg = "^0.30.0"
 redis = "^6.4.0"
 pydantic-settings = "^2.10.1"
-
-[tool.poetry.group.dev.dependencies]
 httpx = "^0.28.1"
 
+[tool.poetry.group.dev.dependencies]
 
 [build-system]
 requires = ["poetry-core"]
