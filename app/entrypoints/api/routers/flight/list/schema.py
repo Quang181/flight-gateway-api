@@ -12,6 +12,9 @@ class FlightListQuery(BaseModel):
     return_date: str = Field(..., pattern=DATE_YYYY_MM_DD_REGEX)
     pax_count: int
     cabin: Literal["Y", "W", "J", "F"] = "Y"
+    direction: Literal["outbound", "inbound"] = "outbound"
+    sort_by: Literal["price", "departure_at", "arrival_at"] | None = None
+    sort_order: Literal["asc", "desc"] = "asc"
     page: int = Field(default=1, ge=1)
     page_size: int = Field(default=10, ge=1, le=100)
 
@@ -49,5 +52,6 @@ class FlightTripGroupResponse(BaseModel):
 
 
 class FlightListResponse(BaseModel):
-    outbound: FlightTripGroupResponse
-    inbound: FlightTripGroupResponse
+    direction: Literal["outbound", "inbound"]
+    items: list[FlightListItemResponse] = Field(default_factory=list)
+    pagination: FlightPaginationResponse
