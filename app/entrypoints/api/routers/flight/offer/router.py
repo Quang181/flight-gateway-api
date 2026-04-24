@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends
 
 from app.application.use_cases.get_offer_detail import GetOfferDetail
-from app.entrypoints.api.decorators import require_token
 from app.entrypoints.api.dependencies import get_offer_detail_use_case
 from app.entrypoints.api.routers.flight.offer.schema import OfferDetailResponse
 
