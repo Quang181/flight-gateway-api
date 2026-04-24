@@ -5,12 +5,12 @@ import logging
 from fastapi import FastAPI
 
 from app.infrastructure.apicall import MockTravelFlightApiClient
+from app.infrastructure.airlines import get_default_airline_labels_path, load_airline_labels
 from app.infrastructure.cache.flight import FlightRedisCache
 from app.infrastructure.cache.redis import RedisManager
 from app.infrastructure.config.settings import get_settings
 from app.infrastructure.db.postgres import PostgresManager
 from app.infrastructure.repositories.flight_repository import MockTravelFlightRepository
-from app.infrastructure.repositories.health_repository import DependencyHealthRepository
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
+    airline_labels = load_airline_labels(get_default_airline_labels_path())
     postgres = PostgresManager(settings.database_url)
     redis = RedisManager(settings.redis_url)
     flight_api_client = MockTravelFlightApiClient(
@@ -42,7 +43,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     app.state.postgres = postgres
     app.state.redis = redis
-    app.state.health_repository = DependencyHealthRepository(postgres=postgres, redis=redis)
+    app.state.airline_labels = airline_labels
     app.state.flight_repository = flight_repository
 
     try:
