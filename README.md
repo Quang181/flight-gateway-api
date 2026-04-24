@@ -116,7 +116,7 @@ app/
 - `app/domain/ports/flight_repository.py`: domain contract for outbound flight search integrations.
 - `app/entrypoints/api/routers/__init__.py`: router aggregator. Combines router groups into one `api_router`.
 - `app/entrypoints/api/routers/flight/__init__.py`: declares the shared flight router group and includes child routers.
-- `app/entrypoints/api/routers/flight/list/schema.py`: request query schema for the `GET /flight` endpoint.
+- `app/entrypoints/api/routers/flight/list/schema.py`: request query schema for the `GET /flights/flight` endpoint.
 - `app/entrypoints/api/routers/flight/list/router.py`: flight list endpoint that validates query params and dispatches to the use case.
 - `app/entrypoints/api/dependencies.py`: FastAPI dependency wiring. Builds use case instances from objects stored in `app.state`.
 - `app/entrypoints/api/decorators.py`: route-level decorators, currently used to mark endpoints that require token authentication.
