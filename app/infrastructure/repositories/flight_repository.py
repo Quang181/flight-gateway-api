@@ -10,6 +10,9 @@ class MockTravelFlightRepository(FlightRepository):
         self._api_client = api_client
         self._cache = cache
 
+    async def get_airports(self) -> dict[str, Any]:
+        return await self._api_client.get_airports()
+
     async def search_flights(self, criteria: dict[str, Any]) -> dict[str, Any]:
         return await self._api_client.search_flights(criteria)
 
