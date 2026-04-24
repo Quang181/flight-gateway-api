@@ -4,6 +4,10 @@ from app.infrastructure.apicall.base import BaseApiClient
 
 
 class MockTravelFlightApiClient(BaseApiClient):
+    async def get_airports(self) -> dict[str, Any]:
+        response = await self._get("/api/airports")
+        return self.parse_json(response)
+
     async def search_flights(self, criteria: dict[str, Any]) -> dict[str, Any]:
         response = await self._post("/api/v1/flightsearch", json=criteria)
         return self.parse_json(response)
