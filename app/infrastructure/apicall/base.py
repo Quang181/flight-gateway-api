@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Mapping
 from typing import Any
 
 import httpx
+
+
+logger = logging.getLogger(__name__)
 
 
 class ExternalApiError(Exception):
@@ -126,10 +130,22 @@ class BaseApiClient:
             except httpx.TimeoutException as exc:
                 if attempt >= self._max_retries:
                     raise ExternalApiTimeoutError("External API request timed out") from exc
+                self._log_retry(
+                    reason="timeout",
+                    method=method,
+                    url=url,
+                    attempt=attempt,
+                )
                 await self._sleep_before_retry(attempt)
             except httpx.HTTPStatusError as exc:
                 status_code = exc.response.status_code
                 if status_code in {429, 503} and attempt < self._max_retries:
+                    self._log_retry(
+                        reason=f"http_{status_code}",
+                        method=method,
+                        url=url,
+                        attempt=attempt,
+                    )
                     await self._sleep_before_retry(attempt)
                 else:
                     raise ExternalApiResponseError(
@@ -155,3 +171,23 @@ class BaseApiClient:
 
     async def _sleep_before_retry(self, attempt: int) -> None:
         await asyncio.sleep(self._backoff_seconds * (2**attempt))
+
+    def _log_retry(self, *, reason: str, method: str, url: str, attempt: int) -> None:
+        retry_in_seconds = self._backoff_seconds * (2**attempt)
+        logger.warning(
+            "Retrying external API request: reason=%s method=%s url=%s attempt=%s/%s retry_in_seconds=%.2f",
+            reason,
+            method,
+            url,
+            attempt + 1,
+            self._max_retries,
+            retry_in_seconds,
+            extra={
+                "reason": reason,
+                "method": method,
+                "url": url,
+                "attempt": attempt + 1,
+                "max_retries": self._max_retries,
+                "retry_in_seconds": retry_in_seconds,
+            },
+        )
