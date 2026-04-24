@@ -4,6 +4,10 @@ from typing import Any
 
 class FlightRepository(ABC):
     @abstractmethod
+    async def get_airports(self) -> dict[str, Any]:
+        """Retrieve airport catalog from an external provider."""
+
+    @abstractmethod
     async def search_flights(self, criteria: dict[str, Any]) -> dict[str, Any]:
         """Search flights from an external provider."""
 
