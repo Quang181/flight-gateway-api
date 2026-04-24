@@ -4,7 +4,7 @@ from app.application.use_cases.get_offer_detail import GetOfferDetail
 from app.entrypoints.api.dependencies import get_offer_detail_use_case
 from app.entrypoints.api.routers.flight.offer.schema import OfferDetailResponse
 
-router = APIRouter(prefix="/flight/offers")
+router = APIRouter(prefix="/offers")
 
 
 @router.get("/{offer_id}", response_model=OfferDetailResponse)
