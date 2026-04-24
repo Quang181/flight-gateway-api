@@ -55,27 +55,31 @@ class BookingPassenger(BaseModel):
         return parsed.isoformat()
 
 
+class BookingContact(BaseModel):
+    email: str = Field(..., min_length=3)
+    phone: str = Field(..., min_length=8, max_length=20)
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        normalized = value.strip()
+        if not EMAIL_REGEX.fullmatch(normalized):
+            raise ValueError("email is invalid")
+        return normalized
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, value: str) -> str:
+        normalized = value.strip()
+        if not PHONE_REGEX.fullmatch(normalized):
+            raise ValueError("phone must contain 8-20 digits")
+        return normalized
+
+
 class BookingCreateRequest(BaseModel):
     offer_id: str = Field(..., min_length=1)
     passengers: list[BookingPassenger] = Field(..., min_length=1)
-    contact_email: str = Field(..., min_length=3)
-    contact_phone: str = Field(..., min_length=8, max_length=20)
-
-    @field_validator("contact_email")
-    @classmethod
-    def validate_contact_email(cls, value: str) -> str:
-        normalized = value.strip()
-        if not EMAIL_REGEX.fullmatch(normalized):
-            raise ValueError("contact_email is invalid")
-        return normalized
-
-    @field_validator("contact_phone")
-    @classmethod
-    def validate_contact_phone(cls, value: str) -> str:
-        normalized = value.strip()
-        if not PHONE_REGEX.fullmatch(normalized):
-            raise ValueError("contact_phone must contain 8-20 digits")
-        return normalized
+    contact: BookingContact
 
     @model_validator(mode="after")
     def validate_unique_passenger_contacts(self) -> "BookingCreateRequest":
@@ -100,6 +104,13 @@ class BookingCreateRequest(BaseModel):
             seen_passport_numbers.add(passport_no)
 
         return self
+
+    def to_legacy_payload(self) -> dict[str, object]:
+        payload = self.model_dump(mode="json")
+        contact = payload.pop("contact", {})
+        payload["contact_email"] = contact.get("email")
+        payload["contact_phone"] = contact.get("phone")
+        return payload
 
 
 class BookingCreateContactResponse(BaseModel):

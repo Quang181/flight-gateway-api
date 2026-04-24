@@ -18,7 +18,8 @@ class CreateBooking:
             result = await self._repository.create_booking(payload)
         except Exception as exc:
             raise map_external_api_error(exc) from exc
-        booking = normalize_booking(result)
+        booking = normalize_booking(data=result,
+                                    method="POST")
 
         return booking
 
