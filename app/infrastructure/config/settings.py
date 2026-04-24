@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     app_name: str = "flight-gateway-api"
     app_host: str = "0.0.0.0"
     app_port: int = 8000
-    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/flight_gateway"
+    database_url: str = "postgresql+asyncpg://postgres:123456@localhost:5432/flight_gateway"
     redis_url: str = "redis://localhost:6379/0"
     mock_travel_api_url: str = "https://mock-travel-api.vercel.app"
     legacy_api_timeout_seconds: float = 10.0
