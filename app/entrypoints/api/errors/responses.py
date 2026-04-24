@@ -1,37 +1,19 @@
 from starlette.responses import JSONResponse
 
+from app.entrypoints.api.errors.codes import ERROR_MESSAGE_KEYS, resolve_error_code
 from app.entrypoints.api.errors.translations import translate
-
-ERROR_MESSAGE_KEYS: dict[int, str] = {
-    200: "authorized",
-    400: "bad_request",
-    401: "unauthorized",
-    403: "forbidden",
-    404: "not_found",
-    429: "too_many_requests",
-    422: "validation_error",
-    502: "bad_gateway",
-    503: "service_unavailable",
-    504: "gateway_timeout",
-    500: "internal_server_error",
-}
-
-
-def get_default_error_message(status_code: int, accept_language: str | None = None) -> str:
-    message_key = ERROR_MESSAGE_KEYS.get(status_code, "unknown_error")
-    return translate(message_key, accept_language)
 
 
 def error_response(
     status_code: int,
-    message: str | None = None,
     message_key: str | None = None,
+    code: str | None = None,
     accept_language: str | None = None,
 ) -> JSONResponse:
+    resolved_message_key = message_key or ERROR_MESSAGE_KEYS.get(status_code, "unknown_error")
     payload = {
         "status_code": status_code,
-        "message": message or translate(message_key, accept_language)
-        if message_key
-        else get_default_error_message(status_code, accept_language),
+        "message": translate(resolved_message_key, accept_language),
+        "code": code or resolve_error_code(resolved_message_key, status_code),
     }
     return JSONResponse(status_code=status_code, content=payload)

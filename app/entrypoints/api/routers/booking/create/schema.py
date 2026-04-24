@@ -3,6 +3,8 @@ from datetime import date
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.entrypoints.api.errors.exceptions import AppValidationError
+
 
 EMAIL_REGEX = re.compile(r"^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$", re.IGNORECASE)
 PHONE_REGEX = re.compile(r"^\d{8,20}$")
@@ -11,21 +13,41 @@ PASSPORT_REGEX = re.compile(r"^[A-Z0-9]{6,20}$", re.IGNORECASE)
 
 
 class BookingPassenger(BaseModel):
-    title: str = Field(..., min_length=1)
-    first_name: str = Field(..., min_length=1)
-    last_name: str = Field(..., min_length=1)
-    dob: str = Field(..., min_length=1)
-    nationality: str = Field(..., min_length=1)
-    passport_no: str = Field(..., min_length=6, max_length=20)
-    email: str = Field(..., min_length=3)
-    phone: str = Field(..., min_length=8, max_length=20)
+    title: str = Field(...)
+    first_name: str = Field(...)
+    last_name: str = Field(...)
+    dob: str = Field(...)
+    nationality: str = Field(...)
+    passport_no: str = Field(...)
+    email: str = Field(...)
+    phone: str = Field(...)
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_required_fields(cls, value: object) -> object:
+        payload = _ensure_dict(value, "passengers", "PASSENGERS_INVALID")
+        for field_name in (
+            "title",
+            "first_name",
+            "last_name",
+            "dob",
+            "nationality",
+            "passport_no",
+            "email",
+            "phone",
+        ):
+            _require_non_empty_string(payload.get(field_name), f"{field_name.upper()}_REQUIRED")
+        return payload
 
     @field_validator("passport_no")
     @classmethod
     def validate_passport_no(cls, value: str) -> str:
         normalized = value.strip()
-        if not PASSPORT_REGEX.fullmatch(normalized):
-            raise ValueError("passport_no must be 6-20 alphanumeric characters")
+        if len(normalized) < 6 or len(normalized) > 20 or not PASSPORT_REGEX.fullmatch(normalized):
+            raise AppValidationError(
+                message_key="passport_no_invalid",
+                code="PASSPORT_NO_INVALID",
+            )
         return normalized
 
     @field_validator("email")
@@ -33,7 +55,7 @@ class BookingPassenger(BaseModel):
     def validate_email(cls, value: str) -> str:
         normalized = value.strip()
         if not EMAIL_REGEX.fullmatch(normalized):
-            raise ValueError("email is invalid")
+            raise AppValidationError(message_key="email_invalid", code="EMAIL_INVALID")
         return normalized
 
     @field_validator("phone")
@@ -41,7 +63,7 @@ class BookingPassenger(BaseModel):
     def validate_phone(cls, value: str) -> str:
         normalized = value.strip()
         if not PHONE_REGEX.fullmatch(normalized):
-            raise ValueError("phone must contain 8-20 digits")
+            raise AppValidationError(message_key="phone_invalid", code="PHONE_INVALID")
         return normalized
 
     @field_validator("dob")
@@ -51,20 +73,38 @@ class BookingPassenger(BaseModel):
         try:
             parsed = date.fromisoformat(normalized)
         except ValueError as exc:
-            raise ValueError("dob must be a valid date in YYYY-MM-DD format") from exc
+            raise AppValidationError(
+                message_key="dob_invalid_format",
+                code="DOB_INVALID",
+            ) from exc
+        minimum_age_in_days = 14
+        age_in_days = (date.today() - parsed).days
+        if age_in_days < minimum_age_in_days:
+            raise AppValidationError(
+                message_key="dob_too_young",
+                code="DOB_INVALID",
+            )
         return parsed.isoformat()
 
 
 class BookingContact(BaseModel):
-    email: str = Field(..., min_length=3)
-    phone: str = Field(..., min_length=8, max_length=20)
+    email: str = Field(...)
+    phone: str = Field(...)
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_required_fields(cls, value: object) -> object:
+        payload = _ensure_dict(value, "contact", "CONTACT_INVALID")
+        _require_non_empty_string(payload.get("email"), "CONTACT_EMAIL_REQUIRED")
+        _require_non_empty_string(payload.get("phone"), "CONTACT_PHONE_REQUIRED")
+        return payload
 
     @field_validator("email")
     @classmethod
     def validate_email(cls, value: str) -> str:
         normalized = value.strip()
         if not EMAIL_REGEX.fullmatch(normalized):
-            raise ValueError("email is invalid")
+            raise AppValidationError(message_key="email_invalid", code="CONTACT_EMAIL_INVALID")
         return normalized
 
     @field_validator("phone")
@@ -72,14 +112,46 @@ class BookingContact(BaseModel):
     def validate_phone(cls, value: str) -> str:
         normalized = value.strip()
         if not PHONE_REGEX.fullmatch(normalized):
-            raise ValueError("phone must contain 8-20 digits")
+            raise AppValidationError(message_key="phone_invalid", code="CONTACT_PHONE_INVALID")
         return normalized
 
 
 class BookingCreateRequest(BaseModel):
-    offer_id: str = Field(..., min_length=1)
-    passengers: list[BookingPassenger] = Field(..., min_length=1)
+    offer_id: str = Field(...)
+    passengers: list[BookingPassenger] = Field(...)
     contact: BookingContact
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_payload(cls, value: object) -> object:
+        payload = _ensure_dict(value, "payload", "BOOKING_CREATE_PAYLOAD_INVALID")
+        _require_non_empty_string(payload.get("offer_id"), "OFFER_ID_REQUIRED")
+
+        passengers = payload.get("passengers")
+        if not isinstance(passengers, list) or not passengers:
+            raise AppValidationError(
+                message_key="passengers_required",
+                code="PASSENGERS_REQUIRED",
+            )
+
+        for index, passenger in enumerate(passengers):
+            try:
+                BookingPassenger.model_validate(passenger)
+            except AppValidationError as exc:
+                raise AppValidationError(
+                    message_key=exc.message_key,
+                    code=_prefix_code(f"PASSENGERS_{index}", exc.code),
+                ) from exc
+
+        try:
+            BookingContact.model_validate(payload.get("contact"))
+        except AppValidationError as exc:
+            raise AppValidationError(
+                message_key=exc.message_key,
+                code=exc.code,
+            ) from exc
+
+        return payload
 
     @model_validator(mode="after")
     def validate_unique_passenger_contacts(self) -> "BookingCreateRequest":
@@ -93,11 +165,20 @@ class BookingCreateRequest(BaseModel):
             passport_no = passenger.passport_no.strip().upper()
 
             if email in seen_emails:
-                raise ValueError("each passenger email must be unique")
+                raise AppValidationError(
+                    message_key="passengers_email_duplicate",
+                    code="PASSENGERS_EMAIL_DUPLICATE",
+                )
             if phone in seen_phones:
-                raise ValueError("each passenger phone must be unique")
+                raise AppValidationError(
+                    message_key="passengers_phone_duplicate",
+                    code="PASSENGERS_PHONE_DUPLICATE",
+                )
             if passport_no in seen_passport_numbers:
-                raise ValueError("each passenger passport_no must be unique")
+                raise AppValidationError(
+                    message_key="passengers_passport_no_duplicate",
+                    code="PASSENGERS_PASSPORT_NO_DUPLICATE",
+                )
 
             seen_emails.add(email)
             seen_phones.add(phone)
@@ -149,3 +230,26 @@ class BookingCreateSummaryResponse(BaseModel):
 class BookingCreateResponse(BaseModel):
     booking_reference: str | None = None
     summary: BookingCreateSummaryResponse
+
+
+def _ensure_dict(value: object, field_name: str, code: str) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise AppValidationError(
+            message_key="invalid_object",
+            code=code,
+        )
+    return value
+
+
+def _require_non_empty_string(value: object, code: str) -> None:
+    if not isinstance(value, str) or not value.strip():
+        raise AppValidationError(
+            message_key="field_required",
+            code=code,
+        )
+
+
+def _prefix_code(prefix: str, code: str | None) -> str:
+    if not code:
+        return prefix
+    return f"{prefix}_{code}"

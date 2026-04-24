@@ -11,20 +11,21 @@ async def handle_http_exception(request: Request, exc: HTTPException) -> JSONRes
     if isinstance(exc, LegacyApiException):
         return error_response(
             status_code=exc.status_code,
-            message=exc.message,
+            message_key=exc.message,
+            code=exc.error_code,
             accept_language=request.headers.get("lang"),
         )
 
-    message = exc.detail if isinstance(exc.detail, str) else None
     message_key = None
+    code = None
     if isinstance(exc, AppHTTPException):
-        message = exc.message
         message_key = exc.message_key
+        code = exc.code
 
     return error_response(
         status_code=exc.status_code,
-        message=message,
         message_key=message_key,
+        code=code,
         accept_language=request.headers.get("lang"),
     )
 

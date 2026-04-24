@@ -18,7 +18,10 @@ class BookingCreateRateLimiter:
     async def ensure_allowed(self, client_ip: str) -> None:
         attempts = await self._get_attempts(client_ip)
         if attempts >= self.LIMIT:
-            raise AppTooManyRequestsError(message_key="booking_create_rate_limited")
+            raise AppTooManyRequestsError(
+                message_key="booking_create_rate_limited",
+                code="BOOKING_CREATE_RATE_LIMITED",
+            )
 
     async def record_success(self, client_ip: str) -> None:
         key = self._build_key(client_ip)
