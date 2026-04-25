@@ -8,6 +8,10 @@ class MockTravelFlightApiClient(BaseApiClient):
         response = await self._get("/api/airports")
         return self.parse_json(response)
 
+    async def get_airport_detail(self, code: str) -> dict[str, Any]:
+        response = await self._get(f"/api/airports/{code.strip().upper()}")
+        return self.parse_json(response)
+
     async def search_flights(self, criteria: dict[str, Any]) -> dict[str, Any]:
         response = await self._post("/api/v1/flightsearch", json=criteria)
         return self.parse_json(response)

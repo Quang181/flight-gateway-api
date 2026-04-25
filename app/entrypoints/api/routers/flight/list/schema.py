@@ -30,13 +30,38 @@ class FlightDurationResponse(BaseModel):
     display: str
 
 
-class FlightListItemResponse(BaseModel):
-    price: FlightPriceResponse | None = None
-    airline_name: str
+class FlightAirlineResponse(BaseModel):
+    code: str | None = None
+    name: str
+
+
+class FlightRouteResponse(BaseModel):
+    origin: str | None = None
+    destination: str | None = None
     departure_at: str | None = None
     arrival_at: str | None = None
     stops: int | None = None
-    flight_duration: FlightDurationResponse | None = None
+    duration: FlightDurationResponse | None = None
+
+
+class FlightBaggagePieceResponse(BaseModel):
+    pieces: int | None = None
+    weight_kg: int | None = None
+
+
+class FlightBaggageResponse(BaseModel):
+    checked: FlightBaggagePieceResponse | None = None
+    cabin: FlightBaggagePieceResponse | None = None
+
+
+class FlightListItemResponse(BaseModel):
+    offer_id: str | None = None
+    airline: FlightAirlineResponse
+    price: FlightPriceResponse | None = None
+    route: FlightRouteResponse
+    refundable: bool | None = None
+    seats_remaining: int | None = None
+    baggage: FlightBaggageResponse | None = None
 
 
 class FlightPaginationResponse(BaseModel):

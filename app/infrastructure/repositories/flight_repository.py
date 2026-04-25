@@ -13,6 +13,9 @@ class MockTravelFlightRepository(FlightRepository):
     async def get_airports(self) -> dict[str, Any]:
         return await self._api_client.get_airports()
 
+    async def get_airport_detail(self, code: str) -> dict[str, Any]:
+        return await self._api_client.get_airport_detail(code)
+
     async def search_flights(self, criteria: dict[str, Any]) -> dict[str, Any]:
         return await self._api_client.search_flights(criteria)
 
@@ -30,3 +33,9 @@ class MockTravelFlightRepository(FlightRepository):
 
     async def set(self, key: str, value: dict[str, Any], ttl_seconds: int) -> None:
         await self._cache.set(key, value, ttl_seconds)
+
+    async def set_offer_metadata(self, offer_id: str, value: dict[str, Any], ttl_seconds: int) -> None:
+        await self._cache.set_offer_metadata(offer_id, value, ttl_seconds)
+
+    async def get_offer_metadata(self, offer_id: str) -> dict[str, Any] | None:
+        return await self._cache.get_offer_metadata(offer_id)

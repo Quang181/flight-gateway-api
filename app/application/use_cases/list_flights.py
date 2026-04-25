@@ -15,6 +15,7 @@ from app.entrypoints.api.errors.exceptions import AppValidationError
 
 AIRPORTS_CACHE_KEY = f"{FLIGHT_SEARCH_CACHE_KEY_PREFIX}:airports"
 AIRPORTS_CACHE_TTL_SECONDS = 3600
+AIRPORT_DETAIL_CACHE_KEY_PREFIX = f"{FLIGHT_SEARCH_CACHE_KEY_PREFIX}:airports:detail"
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,8 @@ class ListFlights:
     ) -> dict[str, Any]:
         normalized_criteria = self._normalize_criteria(criteria)
         await self._validate_airports(normalized_criteria)
+        request_origin = normalized_criteria.get("origin")
+        request_destination = normalized_criteria.get("destination")
         direction = normalized_criteria.pop("direction", "outbound")
         sort_by = normalized_criteria.pop("sort_by", None)
         sort_order = normalized_criteria.pop("sort_order", "asc")
@@ -60,6 +63,12 @@ class ListFlights:
 
         result = await self._repository.search_flights(normalized_criteria)
         prepared_result = self._prepare_result(result, sort_by, sort_order)
+        airport_codes = self._extract_airport_codes(prepared_result)
+        prepared_result = await self._map_airport_names(
+            prepared_result,
+            request_origin,
+            request_destination,
+        )
         requested_payload = self._build_paginated_payload(
             direction=direction,
             items=prepared_result[direction],
@@ -70,6 +79,12 @@ class ListFlights:
 
         if background_tasks is not None:
             background_tasks.add_task(
+                self._cache_offer_metadata,
+                prepared_result,
+                request_origin,
+                request_destination,
+            )
+            background_tasks.add_task(
                 self._cache_remaining_pages,
                 normalized_criteria,
                 prepared_result,
@@ -79,8 +94,97 @@ class ListFlights:
                 sort_order,
                 direction,
             )
+            background_tasks.add_task(
+                self._warm_airport_details,
+                airport_codes,
+                {code for code in (request_origin, request_destination) if isinstance(code, str)},
+            )
 
         return requested_payload
+
+    async def _map_airport_names(
+        self,
+        prepared_result: dict[str, list[dict[str, Any]]],
+        request_origin: str | None,
+        request_destination: str | None,
+    ) -> dict[str, list[dict[str, Any]]]:
+        prioritized_codes = [
+            code
+            for code in (request_origin, request_destination)
+            if isinstance(code, str) and code.strip()
+        ]
+        airport_names = await self._load_airport_names(prioritized_codes)
+        if not airport_names:
+            return prepared_result
+
+        mapped_result: dict[str, list[dict[str, Any]]] = {}
+        for direction, items in prepared_result.items():
+            mapped_items: list[dict[str, Any]] = []
+            for item in items:
+                mapped_items.append(self._replace_route_airport_codes(item, airport_names))
+            mapped_result[direction] = mapped_items
+        return mapped_result
+
+    async def _cache_offer_metadata(
+        self,
+        prepared_result: dict[str, list[dict[str, Any]]],
+        request_origin: str | None,
+        request_destination: str | None,
+    ) -> None:
+        for direction, items in prepared_result.items():
+            origin, destination = self._resolve_direction_route(direction, request_origin, request_destination)
+            if not origin or not destination:
+                continue
+            for item in items:
+                metadata = self._build_offer_metadata(item, direction, origin, destination)
+                if metadata is None:
+                    continue
+                await self._repository.set_offer_metadata(
+                    metadata["offer_id"],
+                    {
+                        "direction": metadata["direction"],
+                        "origin": metadata["origin"],
+                        "destination": metadata["destination"],
+                        "departure_at": metadata["departure_at"],
+                    },
+                    self._cache_ttl_seconds,
+                )
+
+    @staticmethod
+    def _resolve_direction_route(
+        direction: str,
+        request_origin: str | None,
+        request_destination: str | None,
+    ) -> tuple[str | None, str | None]:
+        if direction == "inbound":
+            return request_destination, request_origin
+        return request_origin, request_destination
+
+    @staticmethod
+    def _build_offer_metadata(
+        item: dict[str, Any],
+        direction: str,
+        origin: str,
+        destination: str,
+    ) -> dict[str, str] | None:
+        if not isinstance(item, dict):
+            return None
+
+        offer_id = item.get("offer_id")
+        route = item.get("route")
+        departure_at = route.get("departure_at") if isinstance(route, dict) else None
+        if not isinstance(offer_id, str) or not offer_id.strip():
+            return None
+        if not isinstance(departure_at, str) or not departure_at.strip():
+            return None
+
+        return {
+            "offer_id": offer_id.strip(),
+            "direction": direction,
+            "origin": origin,
+            "destination": destination,
+            "departure_at": departure_at.strip(),
+        }
 
     @staticmethod
     def _normalize_criteria(criteria: dict[str, Any]) -> dict[str, Any]:
@@ -133,6 +237,84 @@ class ListFlights:
                 if isinstance(airport_code, str) and airport_code.strip():
                     valid_codes.add(airport_code.strip().upper())
         return valid_codes
+
+    async def _load_airport_names(self, codes: list[str]) -> dict[str, str]:
+        airport_names: dict[str, str] = {}
+        for code in codes:
+            normalized_code = code.strip().upper()
+            if normalized_code in airport_names:
+                continue
+            airport_name = await self._get_airport_name(normalized_code)
+            if airport_name is not None:
+                airport_names[normalized_code] = airport_name
+        return airport_names
+
+    async def _get_airport_name(self, code: str) -> str | None:
+        detail = await self._get_airport_detail(code)
+        if not isinstance(detail, dict):
+            return None
+
+        airport_name = detail.get("city") or detail.get("name")
+        if not isinstance(airport_name, str) or not airport_name.strip():
+            return None
+        return airport_name.strip()
+
+    async def _get_airport_detail(self, code: str) -> dict[str, Any]:
+        cache_key = self._build_airport_detail_cache_key(code)
+        cached_detail = await self._repository.get(cache_key)
+        if cached_detail is not None:
+            return cached_detail
+
+        detail = await self._repository.get_airport_detail(code)
+        await self._repository.set(cache_key, detail, AIRPORTS_CACHE_TTL_SECONDS)
+        return detail
+
+    @staticmethod
+    def _build_airport_detail_cache_key(code: str) -> str:
+        return f"{AIRPORT_DETAIL_CACHE_KEY_PREFIX}:{code.strip().upper()}"
+
+    @staticmethod
+    def _replace_route_airport_codes(
+        item: dict[str, Any],
+        airport_names: dict[str, str],
+    ) -> dict[str, Any]:
+        route = item.get("route")
+        if not isinstance(route, dict):
+            return item
+
+        mapped_route = dict(route)
+        for field_name in ("origin", "destination"):
+            airport_code = mapped_route.get(field_name)
+            if not isinstance(airport_code, str):
+                continue
+            mapped_route[field_name] = airport_names.get(airport_code.strip().upper(), airport_code)
+
+        return {**item, "route": mapped_route}
+
+    async def _warm_airport_details(
+        self,
+        airport_codes: set[str],
+        prioritized_codes: set[str],
+    ) -> None:
+        remaining_codes = sorted(airport_codes - {code.strip().upper() for code in prioritized_codes})
+        for code in remaining_codes:
+            await self._get_airport_detail(code)
+
+    @staticmethod
+    def _extract_airport_codes(prepared_result: dict[str, list[dict[str, Any]]]) -> set[str]:
+        airport_codes: set[str] = set()
+        for items in prepared_result.values():
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                route = item.get("route")
+                if not isinstance(route, dict):
+                    continue
+                for field_name in ("origin", "destination"):
+                    airport_code = route.get(field_name)
+                    if isinstance(airport_code, str) and airport_code.strip():
+                        airport_codes.add(airport_code.strip().upper())
+        return airport_codes
 
     @staticmethod
     def _build_cache_key(criteria: dict[str, Any]) -> str:
