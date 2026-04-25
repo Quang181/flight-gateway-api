@@ -24,7 +24,7 @@ async def create_booking(
     booking_request = BookingCreateRequest.model_validate(payload)
     client_ip = _get_client_ip(request)
     await rate_limiter.ensure_allowed(client_ip)
-    create_booking = await use_case.execute(booking_request.to_legacy_payload())
+    create_booking = await use_case.execute(booking_request.model_dump(mode="json"))
     await rate_limiter.record_success(client_ip)
     response_create_booking = BookingCreateResponse(**create_booking)
 

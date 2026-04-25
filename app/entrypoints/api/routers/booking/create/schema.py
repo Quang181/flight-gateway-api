@@ -1,5 +1,6 @@
 import re
 from datetime import date
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -117,7 +118,9 @@ class BookingContact(BaseModel):
 
 
 class BookingCreateRequest(BaseModel):
-    offer_id: str = Field(...)
+    trip_type: Literal["one_way", "round_trip"] = Field(...)
+    offer_id_outbound: str = Field(...)
+    offer_id_inbound: str | None = None
     passengers: list[BookingPassenger] = Field(...)
     contact: BookingContact
 
@@ -125,7 +128,19 @@ class BookingCreateRequest(BaseModel):
     @classmethod
     def validate_payload(cls, value: object) -> object:
         payload = _ensure_dict(value, "payload", "BOOKING_CREATE_PAYLOAD_INVALID")
-        _require_non_empty_string(payload.get("offer_id"), "OFFER_ID_REQUIRED")
+        _require_non_empty_string(payload.get("trip_type"), "TRIP_TYPE_REQUIRED")
+        _require_non_empty_string(payload.get("offer_id_outbound"), "OFFER_ID_OUTBOUND_REQUIRED")
+
+        trip_type = payload.get("trip_type")
+        inbound_offer_id = payload.get("offer_id_inbound")
+        if trip_type == "one_way":
+            if inbound_offer_id not in (None, ""):
+                raise AppValidationError(
+                    message_key="offer_id_inbound_not_allowed",
+                    code="OFFER_ID_INBOUND_NOT_ALLOWED",
+                )
+        elif trip_type == "round_trip":
+            _require_non_empty_string(inbound_offer_id, "OFFER_ID_INBOUND_REQUIRED")
 
         passengers = payload.get("passengers")
         if not isinstance(passengers, list) or not passengers:
@@ -185,13 +200,6 @@ class BookingCreateRequest(BaseModel):
             seen_passport_numbers.add(passport_no)
 
         return self
-
-    def to_legacy_payload(self) -> dict[str, object]:
-        payload = self.model_dump(mode="json")
-        contact = payload.pop("contact", {})
-        payload["contact_email"] = contact.get("email")
-        payload["contact_phone"] = contact.get("phone")
-        return payload
 
 
 class BookingCreateContactResponse(BaseModel):
