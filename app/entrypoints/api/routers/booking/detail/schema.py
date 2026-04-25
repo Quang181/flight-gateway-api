@@ -34,6 +34,13 @@ class BookingSummaryResponse(BaseModel):
     ticketing: BookingTicketingResponse
 
 
-class BookingDetailResponse(BaseModel):
+class BookingTripDetailResponse(BaseModel):
     booking_reference: str | None = None
     summary: BookingSummaryResponse
+
+
+class BookingDetailResponse(BaseModel):
+    booking_reference: str | None = None
+    trip_type: str | None = None
+    outbound: BookingTripDetailResponse
+    inbound: BookingTripDetailResponse | None = None
