@@ -23,3 +23,9 @@ class RedisManager:
 
     async def expire(self, key: str, seconds: int) -> bool:
         return await self._client.expire(key, seconds)
+
+    async def sadd(self, key: str, *values: str) -> int:
+        return await self._client.sadd(key, *values)
+
+    async def sismember(self, key: str, value: str) -> bool:
+        return bool(await self._client.sismember(key, value))
