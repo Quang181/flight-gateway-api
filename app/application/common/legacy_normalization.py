@@ -157,13 +157,27 @@ def normalize_trip_offer_summary(item: dict[str, Any], airline_labels: dict[str,
         stops = max(len(legs) - 1, 0)
 
     airline = airline_info(marketing_code, airline_labels=airline_labels)
+    origin = first_value(first_leg, "departure_info.airport.code")
+    destination = first_value(last_leg, "arrival_info.airport.code")
+    seats_remaining = _to_int(first_value(item, "seats_remaining", "avl_seats", "seatAvailability"))
     return {
+        "offer_id": first_value(item, "offer_id", "offerId", "id"),
+        "airline": {
+            "code": airline["code"],
+            "name": airline["label"],
+        },
         "price": normalize_price(item),
-        "airline_name": airline["label"],
-        "departure_at": departure_at,
-        "arrival_at": arrival_at,
-        "stops": stops,
-        "flight_duration": normalize_duration(duration_minutes),
+        "route": {
+            "origin": origin,
+            "destination": destination,
+            "departure_at": departure_at,
+            "arrival_at": arrival_at,
+            "stops": stops,
+            "duration": normalize_duration(duration_minutes),
+        },
+        "refundable": _to_bool(first_value(item, "refundable", "isRefundable")),
+        "seats_remaining": seats_remaining,
+        "baggage": normalize_baggage(item),
     }
 
 
@@ -196,7 +210,7 @@ def normalize_offer_detail(data: dict[str, Any]) -> dict[str, Any]:
 def normalize_booking(data: dict[str, Any],
                       method="GET") -> dict[str, Any]:
     payload = unwrap_data(data)
-    if method == "GET":
+    if method == "GET" and isinstance(payload.get("reservation"), dict):
         payload = payload.get("reservation", {})
 
     passengers = mapping_passengers(passengers=payload.get("passengers", []))
@@ -264,6 +278,46 @@ def normalize_duration(duration_minutes: int | None) -> dict[str, Any] | None:
         "duration_minutes": duration_minutes,
         "display": f"{hours}h {minutes:02d}m",
     }
+
+
+def normalize_baggage(data: Any) -> dict[str, Any] | None:
+    checked = _normalize_baggage_piece(first_value(data, "baggage.checked"))
+    cabin = _normalize_baggage_piece(first_value(data, "baggage.cabin_baggage"))
+    if checked is None and cabin is None:
+        return None
+    return {
+        "checked": checked,
+        "cabin": cabin,
+    }
+
+
+def _normalize_baggage_piece(data: Any) -> dict[str, Any] | None:
+    if not isinstance(data, dict):
+        return None
+    pieces = _to_int(first_value(data, "pieces"))
+    weight_kg = _to_int(first_value(data, "weight_kg"))
+    if pieces is None and weight_kg is None:
+        return None
+    return {
+        "pieces": pieces,
+        "weight_kg": weight_kg,
+    }
+
+
+def _to_bool(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if value in (None, ""):
+        return None
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes"}:
+            return True
+        if normalized in {"false", "0", "no"}:
+            return False
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return None
 
 def _get_path(data: Any, path: str) -> Any:
     current = data
