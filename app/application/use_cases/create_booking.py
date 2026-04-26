@@ -1,7 +1,7 @@
 from typing import Any
 from datetime import datetime
 
-from app.application.common.legacy_normalization import normalize_booking
+from app.application.common.legacy_normalization import build_booking_detail_response, normalize_booking
 from app.application.common.upstream_errors import map_external_api_error
 from app.domain.ports.booking_repository import BookingRepository
 from app.domain.ports.flight_repository import FlightRepository
@@ -28,8 +28,12 @@ class CreateBooking:
             self._build_booking_record(payload, outbound_result, inbound_result)
         )
 
-        booking = normalize_booking(data=outbound_result, method="POST")
-        return booking
+        return build_booking_detail_response(
+            booking_reference=outbound_result.get("data", {}).get("booking_ref"),
+            trip_type=payload["trip_type"],
+            outbound=normalize_booking(data=outbound_result, method="POST"),
+            inbound=normalize_booking(data=inbound_result, method="POST") if inbound_result else None,
+        )
 
     async def _validate_offer_ids(self, payload: dict[str, Any]) -> None:
         outbound_metadata = await self._ensure_offer_metadata(

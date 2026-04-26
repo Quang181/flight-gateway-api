@@ -1,7 +1,7 @@
 import hashlib
 
 from app.application.common.constant import BOOKING_CACHE_KEY_PREFIX
-from app.application.common.legacy_normalization import normalize_booking
+from app.application.common.legacy_normalization import build_booking_detail_response, normalize_booking
 from app.application.common.upstream_errors import map_external_api_error
 from app.domain.ports.booking_repository import BookingRepository
 from app.domain.ports.flight_repository import FlightRepository
@@ -39,12 +39,12 @@ class GetBooking:
             if isinstance(inbound_reference, str) and inbound_reference.strip():
                 inbound = await self._load_legacy_booking(inbound_reference)
 
-        payload = {
-            "booking_reference": reference,
-            "trip_type": booking_record.get("trip_type"),
-            "outbound": outbound,
-            "inbound": inbound,
-        }
+        payload = build_booking_detail_response(
+            booking_reference=reference,
+            trip_type=booking_record.get("trip_type"),
+            outbound=outbound,
+            inbound=inbound,
+        )
         await self._repository.set(cache_key, payload, self._cache_ttl_seconds)
         return payload
 
