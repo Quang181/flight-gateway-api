@@ -1,5 +1,3 @@
-from typing import Any
-
 from fastapi import APIRouter, Body, Depends, Request
 
 from app.application.use_cases.create_booking import CreateBooking
@@ -7,26 +5,26 @@ from app.entrypoints.api.dependencies import (
     get_booking_create_rate_limiter,
     get_create_booking_use_case,
 )
-from app.entrypoints.api.routers.booking.create.schema import BookingCreateRequest, BookingCreateResponse
+from app.entrypoints.api.routers.booking.create.schema import BookingCreateRequest
+from app.entrypoints.api.routers.booking.detail.schema import BookingDetailResponse
 from app.infrastructure.cache.booking_rate_limit import BookingCreateRateLimiter
 
 router = APIRouter(prefix="/bookings")
 
 
-@router.post("", response_model=BookingCreateResponse)
+@router.post("", response_model=BookingDetailResponse)
 # @require_token
 async def create_booking(
         request: Request,
-        payload: dict[str, Any] = Body(...),
+        payload: BookingCreateRequest = Body(...),
         use_case: CreateBooking = Depends(get_create_booking_use_case),
         rate_limiter: BookingCreateRateLimiter = Depends(get_booking_create_rate_limiter),
-) -> BookingCreateResponse:
-    booking_request = BookingCreateRequest.model_validate(payload)
+) -> BookingDetailResponse:
     client_ip = _get_client_ip(request)
     await rate_limiter.ensure_allowed(client_ip)
-    create_booking = await use_case.execute(booking_request.model_dump(mode="json"))
+    create_booking = await use_case.execute(payload.model_dump(mode="json"))
     await rate_limiter.record_success(client_ip)
-    response_create_booking = BookingCreateResponse(**create_booking)
+    response_create_booking = BookingDetailResponse(**create_booking)
 
     return response_create_booking
 

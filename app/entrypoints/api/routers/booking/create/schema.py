@@ -1,10 +1,9 @@
 import re
 from datetime import date
-from typing import Literal
-
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.entrypoints.api.errors.exceptions import AppValidationError
+from app.entrypoints.api.routers.booking.detail.schema import BookingDetailResponse
 
 
 EMAIL_REGEX = re.compile(r"^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$", re.IGNORECASE)
@@ -118,7 +117,32 @@ class BookingContact(BaseModel):
 
 
 class BookingCreateRequest(BaseModel):
-    trip_type: Literal["one_way", "round_trip"] = Field(...)
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "trip_type": "round_trip",
+                "offer_id_outbound": "offer-out-1",
+                "offer_id_inbound": "offer-in-1",
+                "passengers": [
+                    {
+                        "title": "Mr",
+                        "first_name": "John",
+                        "last_name": "Doe",
+                        "dob": "1995-05-20",
+                        "nationality": "VN",
+                        "passport_no": "B1234567",
+                        "email": "passenger@gmail.com",
+                        "phone": "0987777712",
+                    }
+                ],
+                "contact": {
+                    "email": "test@gmail.com",
+                    "phone": "082187382131",
+                },
+            }
+        }
+    )
+    trip_type: str = Field(...)
     offer_id_outbound: str = Field(...)
     offer_id_inbound: str | None = None
     passengers: list[BookingPassenger] = Field(...)
@@ -168,6 +192,17 @@ class BookingCreateRequest(BaseModel):
 
         return payload
 
+    @field_validator("trip_type")
+    @classmethod
+    def validate_trip_type(cls, value: str) -> str:
+        normalized = value.strip()
+        if normalized not in {"one_way", "round_trip"}:
+            raise AppValidationError(
+                message_key="trip_type_invalid",
+                code="TRIP_TYPE_INVALID",
+            )
+        return normalized
+
     @model_validator(mode="after")
     def validate_unique_passenger_contacts(self) -> "BookingCreateRequest":
         seen_emails: set[str] = set()
@@ -202,42 +237,7 @@ class BookingCreateRequest(BaseModel):
         return self
 
 
-class BookingCreateContactResponse(BaseModel):
-    email: str | None = None
-    phone: str | None = None
-
-
-class BookingCreatePassengerResponse(BaseModel):
-    pax_id: str | None = None
-    type: str | None = None
-    first_name: str | None = None
-    last_name: str | None = None
-    name: str | None = None
-    title: str | None = None
-    dob: str | None = None
-    nationality: str | None = None
-    passport_no: str | None = None
-
-
-class BookingCreateTicketingResponse(BaseModel):
-    status: str | None = None
-    time_limit: str | None = None
-    ticket_numbers: list[str] = Field(default_factory=list)
-
-
-class BookingCreateSummaryResponse(BaseModel):
-    pnr: str | None = None
-    status: str | None = None
-    status_code: str | None = None
-    created_at: str | None = None
-    contact: BookingCreateContactResponse
-    passengers: list[BookingCreatePassengerResponse] = Field(default_factory=list)
-    ticketing: BookingCreateTicketingResponse
-
-
-class BookingCreateResponse(BaseModel):
-    booking_reference: str | None = None
-    summary: BookingCreateSummaryResponse
+BookingCreateResponse = BookingDetailResponse
 
 
 def _ensure_dict(value: object, field_name: str, code: str) -> dict[str, object]:
