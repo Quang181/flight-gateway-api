@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class BookingPassengerResponse(BaseModel):
@@ -30,7 +30,6 @@ class BookingSummaryResponse(BaseModel):
     status_code: str | None = None
     created_at: str | None = None
     contact: BookingContactResponse
-    passengers: list[BookingPassengerResponse] = Field(default_factory=list)
     ticketing: BookingTicketingResponse
 
 
@@ -40,7 +39,65 @@ class BookingTripDetailResponse(BaseModel):
 
 
 class BookingDetailResponse(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "booking_reference": "BOOK-OUT",
+                "trip_type": "round_trip",
+                "passengers": [
+                    {
+                        "pax_id": "PAX1",
+                        "type": "ADT",
+                        "first_name": "John",
+                        "last_name": "Doe",
+                        "name": "Doe/John Mr",
+                        "title": "Mr",
+                        "dob": "1995-05-20",
+                        "nationality": "VN",
+                        "passport_no": "B1234567",
+                    }
+                ],
+                "outbound": {
+                    "booking_reference": "BOOK-OUT",
+                    "summary": {
+                        "pnr": "PNR-OUT",
+                        "status": "confirmed",
+                        "status_code": "CONFIRMED",
+                        "created_at": "2026-05-01T08:00:00Z",
+                        "contact": {
+                            "email": "test@gmail.com",
+                            "phone": "082187382131",
+                        },
+                        "ticketing": {
+                            "status": "confirmed",
+                            "time_limit": None,
+                            "ticket_numbers": [],
+                        },
+                    },
+                },
+                "inbound": {
+                    "booking_reference": "BOOK-IN",
+                    "summary": {
+                        "pnr": "PNR-IN",
+                        "status": "confirmed",
+                        "status_code": "CONFIRMED",
+                        "created_at": "2026-05-01T08:00:00Z",
+                        "contact": {
+                            "email": "test@gmail.com",
+                            "phone": "082187382131",
+                        },
+                        "ticketing": {
+                            "status": "confirmed",
+                            "time_limit": None,
+                            "ticket_numbers": [],
+                        },
+                    },
+                },
+            }
+        }
+    )
     booking_reference: str | None = None
     trip_type: str | None = None
+    passengers: list[BookingPassengerResponse] = Field(default_factory=list)
     outbound: BookingTripDetailResponse
     inbound: BookingTripDetailResponse | None = None
