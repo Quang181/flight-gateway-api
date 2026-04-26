@@ -33,11 +33,13 @@ app/
 │       ├── create_booking.py
 │       ├── get_booking.py
 │       ├── get_offer_detail.py
+│       ├── list_bookings.py
 │       └── list_flights.py
 ├── domain/
 │   ├── __init__.py
 │   └── ports/
 │       ├── __init__.py
+│       ├── booking_repository.py
 │       └── flight_repository.py
 ├── entrypoints/
 │   ├── __init__.py
@@ -65,7 +67,11 @@ app/
 │           │   │   ├── __init__.py
 │           │   │   ├── router.py
 │           │   │   └── schema.py
-│           │   └── detail/
+│           │   ├── detail/
+│           │       ├── __init__.py
+│           │       ├── router.py
+│           │       └── schema.py
+│           │   └── list/
 │           │       ├── __init__.py
 │           │       ├── router.py
 │           │       └── schema.py
@@ -90,6 +96,7 @@ app/
     │   └── flight_search.py
     ├── cache/
     │   ├── __init__.py
+    │   ├── booking_rate_limit.py
     │   ├── flight.py
     │   └── redis.py
     ├── config/
@@ -105,6 +112,7 @@ app/
     ├── lifecycle.py
     └── repositories/
         ├── __init__.py
+        ├── booking_repository.py
         └── flight_repository.py
 ```
 
@@ -112,12 +120,18 @@ app/
 
 - `app/bootstrap.py`: creates the FastAPI app, registers middleware, routes, and lifespan handling.
 - `app/application/common/constant.py`: shared constants for the application layer, such as reusable regex patterns.
+- `app/application/use_cases/list_bookings.py`: use case for listing persisted bookings from PostgreSQL.
 - `app/application/use_cases/list_flights.py`: use case for searching flights through the outbound flight repository port.
+- `app/domain/ports/booking_repository.py`: domain contract for booking persistence.
 - `app/domain/ports/flight_repository.py`: domain contract for outbound flight search integrations.
 - `app/entrypoints/api/routers/__init__.py`: router aggregator. Combines router groups into one `api_router`.
 - `app/entrypoints/api/routers/flight/__init__.py`: declares the shared flight router group and includes child routers.
-- `app/entrypoints/api/routers/flight/list/schema.py`: request query schema for the `GET /flights/flight` endpoint.
+- `app/entrypoints/api/routers/flight/list/schema.py`: request query schema for the `GET /flights/search` endpoint.
 - `app/entrypoints/api/routers/flight/list/router.py`: flight list endpoint that validates query params and dispatches to the use case.
+- `app/entrypoints/api/routers/flight/offer/router.py`: offer detail endpoint for `GET /flights/offers/{offer_id}`.
+- `app/entrypoints/api/routers/booking/list/router.py`: booking list endpoint for `GET /flights/bookings`.
+- `app/entrypoints/api/routers/booking/detail/router.py`: booking detail endpoint for `GET /flights/bookings/{reference}`.
+- `app/entrypoints/api/routers/booking/create/router.py`: booking create endpoint for `POST /flights/bookings`.
 - `app/entrypoints/api/dependencies.py`: FastAPI dependency wiring. Builds use case instances from objects stored in `app.state`.
 - `app/entrypoints/api/decorators.py`: route-level decorators, currently used to mark endpoints that require token authentication.
 - `app/entrypoints/api/middlewares/auth.py`: request middleware that checks the configured token for protected endpoints.
@@ -125,10 +139,12 @@ app/
 - `app/infrastructure/apicall/flight_search.py`: concrete outbound adapter for the mock travel flight search API.
 - `app/infrastructure/airlines/catalog.py`: loads airline code to airline name mappings from JSON at startup.
 - `app/infrastructure/config/settings.py`: loads and validates configuration from `env.yaml`.
+- `app/infrastructure/cache/booking_rate_limit.py`: Redis-backed rate limiter for booking creation.
 - `app/infrastructure/data/airlines.json`: preload data source for airline code to airline name mapping.
 - `app/infrastructure/lifecycle.py`: startup and shutdown flow. Initializes PostgreSQL, Redis, and shared app state.
 - `app/infrastructure/db/postgres.py`: PostgreSQL connection manager.
 - `app/infrastructure/cache/redis.py`: Redis connection manager.
+- `app/infrastructure/repositories/booking_repository.py`: SQLAlchemy repository for booking persistence and queries.
 
 ### How The Layers Work Together
 
@@ -153,9 +169,12 @@ flight_gateway:
   app_port: 8000
   database_url: postgresql+asyncpg://postgres:123456@localhost:5432/flight_gateway
   redis_url: redis://localhost:6379/0
+  mock_travel_api_url: https://mock-travel-api.vercel.app
   legacy_api_timeout_seconds: 10.0
   legacy_api_retry_count: 2
   legacy_api_backoff_seconds: 0.25
+  flight_search_cache_ttl_seconds: 300
+  booking_cache_ttl_seconds: 300
   auth_header_name: X-API-Token
   auth_token: change-me
 ```
@@ -167,9 +186,12 @@ flight_gateway:
 - `app_port`: port the server listens on.
 - `database_url`: PostgreSQL connection string used by SQLAlchemy/asyncpg.
 - `redis_url`: Redis connection string.
+- `mock_travel_api_url`: base URL of the upstream mock travel API.
 - `legacy_api_timeout_seconds`: timeout for each request sent to the legacy/mock travel API.
 - `legacy_api_retry_count`: number of retries after the first failed attempt when the error is retryable.
 - `legacy_api_backoff_seconds`: base delay used for exponential backoff between retries.
+- `flight_search_cache_ttl_seconds`: TTL in seconds for cached flight search results and offer metadata.
+- `booking_cache_ttl_seconds`: TTL in seconds for cached booking detail responses.
 - `auth_header_name`: request header used to carry the token for protected routes.
 - `auth_token`: expected token value for protected routes.
 
@@ -351,3 +373,13 @@ poetry run alembic current
 ```
 
 ## Available Endpoints
+
+All API routes are mounted under the `/flights` prefix.
+
+- `GET /flights/search`: search flight offers.
+- `GET /flights/offers/{offer_id}`: retrieve offer details by offer ID.
+- `GET /flights/bookings`: list persisted bookings with pagination and sorting.
+- `GET /flights/bookings/{reference}`: retrieve booking details by booking reference.
+- `POST /flights/bookings`: create a one-way or round-trip booking.
+
+- Swagger UI is available at `/docs`.
