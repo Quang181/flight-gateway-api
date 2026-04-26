@@ -80,7 +80,19 @@ async def test_get_booking_one_way_loads_outbound_only_from_legacy() -> None:
                     "StatusCode": "CONFIRMED",
                     "created_at": "2026-05-01T08:00:00Z",
                     "contact": {"email": "test@gmail.com", "phone": "082187382131"},
-                    "passengers": [],
+                    "passengers": [
+                        {
+                            "pax_id": "PAX1",
+                            "type": "ADT",
+                            "first_name": "John",
+                            "last_name": "Doe",
+                            "name": "Doe/John Mr",
+                            "title": "Mr",
+                            "dob": "1995-05-20",
+                            "nationality": "VN",
+                            "passport_no": "B1234567",
+                        }
+                    ],
                     "ticketing": {"status": "confirmed", "ticket_numbers": []},
                 }
             }
@@ -103,8 +115,10 @@ async def test_get_booking_one_way_loads_outbound_only_from_legacy() -> None:
     assert repository.get_booking_calls == ["LEGACY-OUT-1"]
     assert result["booking_reference"] == "BOOK-REF-1"
     assert result["trip_type"] == "one_way"
+    assert result["passengers"][0]["pax_id"] == "PAX1"
     assert result["outbound"]["booking_reference"] == "LEGACY-OUT-1"
     assert result["outbound"]["summary"]["pnr"] == "PNR-OUT"
+    assert "passengers" not in result["outbound"]["summary"]
     assert result["inbound"] is None
 
 
@@ -120,7 +134,19 @@ async def test_get_booking_round_trip_loads_both_outbound_and_inbound_from_legac
                     "StatusCode": "CONFIRMED",
                     "created_at": "2026-05-01T08:00:00Z",
                     "contact": {"email": "test@gmail.com", "phone": "082187382131"},
-                    "passengers": [],
+                    "passengers": [
+                        {
+                            "pax_id": "PAX1",
+                            "type": "ADT",
+                            "first_name": "John",
+                            "last_name": "Doe",
+                            "name": "Doe/John Mr",
+                            "title": "Mr",
+                            "dob": "1995-05-20",
+                            "nationality": "VN",
+                            "passport_no": "B1234567",
+                        }
+                    ],
                     "ticketing": {"status": "confirmed", "ticket_numbers": ["T1"]},
                 }
             },
@@ -132,7 +158,19 @@ async def test_get_booking_round_trip_loads_both_outbound_and_inbound_from_legac
                     "StatusCode": "CONFIRMED",
                     "created_at": "2026-05-02T08:00:00Z",
                     "contact": {"email": "test@gmail.com", "phone": "082187382131"},
-                    "passengers": [],
+                    "passengers": [
+                        {
+                            "pax_id": "PAX1",
+                            "type": "ADT",
+                            "first_name": "John",
+                            "last_name": "Doe",
+                            "name": "Doe/John Mr",
+                            "title": "Mr",
+                            "dob": "1995-05-20",
+                            "nationality": "VN",
+                            "passport_no": "B1234567",
+                        }
+                    ],
                     "ticketing": {"status": "confirmed", "ticket_numbers": ["T2"]},
                 }
             },
@@ -155,8 +193,11 @@ async def test_get_booking_round_trip_loads_both_outbound_and_inbound_from_legac
     assert repository.get_booking_calls == ["LEGACY-OUT-1", "LEGACY-IN-1"]
     assert result["booking_reference"] == "BOOK-REF-1"
     assert result["trip_type"] == "round_trip"
+    assert result["passengers"][0]["pax_id"] == "PAX1"
     assert result["outbound"]["booking_reference"] == "LEGACY-OUT-1"
+    assert "passengers" not in result["outbound"]["summary"]
     assert result["inbound"]["booking_reference"] == "LEGACY-IN-1"
+    assert "passengers" not in result["inbound"]["summary"]
     assert result["inbound"]["summary"]["ticketing"]["ticket_numbers"] == ["T2"]
 
 
@@ -178,6 +219,7 @@ async def test_get_booking_uses_cache_before_db_and_legacy() -> None:
     cached_value = {
         "booking_reference": "BOOK-REF-1",
         "trip_type": "one_way",
+        "passengers": [{"pax_id": "PAX1"}],
         "outbound": {"booking_reference": "LEGACY-OUT-1", "summary": {"pnr": "PNR-OUT"}},
         "inbound": None,
     }

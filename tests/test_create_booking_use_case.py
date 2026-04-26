@@ -67,6 +67,84 @@ def _build_payload(**overrides: object) -> dict:
 
 
 @pytest.mark.anyio
+async def test_create_booking_one_way_returns_detail_booking_shape() -> None:
+    repository = FakeFlightRepository(
+        offer_metadata={
+            "offer-out-1": {
+                "direction": "outbound",
+                "origin": "HAN",
+                "destination": "SGN",
+                "departure_at": "2026-05-01T01:15:00Z",
+            }
+        },
+        booking_results=[
+            {
+                "data": {
+                    "booking_ref": "BOOK-OUT",
+                    "pnr": "PNR-OUT",
+                    "status": "confirmed",
+                    "StatusCode": "CONFIRMED",
+                    "created_at": "2026-05-01T08:00:00Z",
+                    "contact": {"email": "test@gmail.com", "phone": "082187382131"},
+                    "passengers": [
+                        {
+                            "pax_id": "PAX1",
+                            "type": "ADT",
+                            "first_name": "John",
+                            "last_name": "Doe",
+                            "name": "Doe/John Mr",
+                            "title": "Mr",
+                            "dob": "1995-05-20",
+                            "nationality": "VN",
+                            "passport_no": "B1234567",
+                        }
+                    ],
+                    "ticketing": {"status": "confirmed", "ticket_numbers": []},
+                }
+            }
+        ],
+    )
+    booking_repository = FakeBookingRepository()
+    use_case = CreateBooking(repository=repository, booking_repository=booking_repository)
+
+    result = await use_case.execute(_build_payload())
+
+    assert result == {
+        "booking_reference": "BOOK-OUT",
+        "trip_type": "one_way",
+        "passengers": [
+            {
+                "pax_id": "PAX1",
+                "type": "ADT",
+                "first_name": "John",
+                "last_name": "Doe",
+                "name": "Doe/John Mr",
+                "title": "Mr",
+                "dob": "1995-05-20",
+                "nationality": "VN",
+                "passport_no": "B1234567",
+            }
+        ],
+        "outbound": {
+            "booking_reference": "BOOK-OUT",
+            "summary": {
+                "pnr": "PNR-OUT",
+                "status": "confirmed",
+                "status_code": "CONFIRMED",
+                "created_at": "2026-05-01T08:00:00Z",
+                "contact": {"email": "test@gmail.com", "phone": "082187382131"},
+                "ticketing": {
+                    "status": "confirmed",
+                    "time_limit": None,
+                    "ticket_numbers": [],
+                },
+            },
+        },
+        "inbound": None,
+    }
+
+
+@pytest.mark.anyio
 async def test_create_booking_rejects_outbound_offer_missing_from_outbound_index() -> None:
     repository = FakeFlightRepository(
         offer_metadata={
@@ -272,7 +350,19 @@ async def test_create_booking_round_trip_calls_legacy_twice_and_persists_record(
                     "StatusCode": "CONFIRMED",
                     "created_at": "2026-05-01T08:00:00Z",
                     "contact": {"email": "test@gmail.com", "phone": "082187382131"},
-                    "passengers": [],
+                    "passengers": [
+                        {
+                            "pax_id": "PAX1",
+                            "type": "ADT",
+                            "first_name": "John",
+                            "last_name": "Doe",
+                            "name": "Doe/John Mr",
+                            "title": "Mr",
+                            "dob": "1995-05-20",
+                            "nationality": "VN",
+                            "passport_no": "B1234567",
+                        }
+                    ],
                     "ticketing": {"status": "confirmed", "ticket_numbers": []},
                 }
             },
@@ -284,7 +374,19 @@ async def test_create_booking_round_trip_calls_legacy_twice_and_persists_record(
                     "StatusCode": "CONFIRMED",
                     "created_at": "2026-05-01T08:00:00Z",
                     "contact": {"email": "test@gmail.com", "phone": "082187382131"},
-                    "passengers": [],
+                    "passengers": [
+                        {
+                            "pax_id": "PAX1",
+                            "type": "ADT",
+                            "first_name": "John",
+                            "last_name": "Doe",
+                            "name": "Doe/John Mr",
+                            "title": "Mr",
+                            "dob": "1995-05-20",
+                            "nationality": "VN",
+                            "passport_no": "B1234567",
+                        }
+                    ],
                     "ticketing": {"status": "confirmed", "ticket_numbers": []},
                 }
             },
@@ -314,3 +416,23 @@ async def test_create_booking_round_trip_calls_legacy_twice_and_persists_record(
     assert booking_repository.created[0]["inbound_booking_ref"] == "BOOK-IN"
     assert booking_repository.created[0]["status"] == "confirmed"
     assert result["booking_reference"] == "BOOK-OUT"
+    assert result["trip_type"] == "round_trip"
+    assert result["passengers"] == [
+        {
+            "pax_id": "PAX1",
+            "type": "ADT",
+            "first_name": "John",
+            "last_name": "Doe",
+            "name": "Doe/John Mr",
+            "title": "Mr",
+            "dob": "1995-05-20",
+            "nationality": "VN",
+            "passport_no": "B1234567",
+        }
+    ]
+    assert result["outbound"]["booking_reference"] == "BOOK-OUT"
+    assert result["outbound"]["summary"]["pnr"] == "PNR-OUT"
+    assert "passengers" not in result["outbound"]["summary"]
+    assert result["inbound"]["booking_reference"] == "BOOK-IN"
+    assert result["inbound"]["summary"]["pnr"] == "PNR-IN"
+    assert "passengers" not in result["inbound"]["summary"]

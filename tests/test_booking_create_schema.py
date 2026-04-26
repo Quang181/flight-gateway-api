@@ -110,3 +110,32 @@ def test_booking_create_request_requires_inbound_offer_for_round_trip() -> None:
         )
 
     assert exc_info.value.code == "OFFER_ID_INBOUND_REQUIRED"
+
+
+def test_booking_create_request_rejects_invalid_trip_type() -> None:
+    with pytest.raises(AppValidationError) as exc_info:
+        BookingCreateRequest.model_validate(
+            {
+                "trip_type": "multi_city",
+                "offer_id_outbound": "offer-out-1",
+                "passengers": [
+                    {
+                        "title": "test",
+                        "first_name": "ssd",
+                        "last_name": "qdqwd",
+                        "dob": "2025-11-11",
+                        "nationality": "China",
+                        "passport_no": "9182312312",
+                        "email": "passenger@gmail.com",
+                        "phone": "0987777712",
+                    }
+                ],
+                "contact": {
+                    "email": "test@gmail.com",
+                    "phone": "082187382131",
+                },
+            }
+        )
+
+    assert exc_info.value.code == "TRIP_TYPE_INVALID"
+    assert exc_info.value.message_key == "trip_type_invalid"
