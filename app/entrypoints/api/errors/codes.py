@@ -35,6 +35,7 @@ ERROR_CODES: dict[str, str] = {
     "offer_id_required": "OFFER_ID_REQUIRED",
     "offer_id_not_found": "OFFER_ID_NOT_FOUND",
     "trip_type_required": "TRIP_TYPE_REQUIRED",
+    "trip_type_invalid": "TRIP_TYPE_INVALID",
     "offer_id_outbound_required": "OFFER_ID_OUTBOUND_REQUIRED",
     "offer_id_inbound_required": "OFFER_ID_INBOUND_REQUIRED",
     "offer_id_inbound_not_allowed": "OFFER_ID_INBOUND_NOT_ALLOWED",
@@ -52,6 +53,8 @@ ERROR_CODES: dict[str, str] = {
     "flight_origin_destination_must_differ": "FLIGHT_ORIGIN_DESTINATION_MUST_DIFFER",
     "flight_origin_invalid_airport": "FLIGHT_ORIGIN_INVALID_AIRPORT",
     "flight_destination_invalid_airport": "FLIGHT_DESTINATION_INVALID_AIRPORT",
+    "departure_date_invalid": "DEPARTURE_DATE_INVALID",
+    "return_date_invalid": "RETURN_DATE_INVALID",
 
     # Upstream errors
     "upstream_timeout": "UPSTREAM_TIMEOUT",
