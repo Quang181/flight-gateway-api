@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
+import re
 from typing import Any
 
 from app.application.common.constant import UNKNOWN_LABEL
@@ -186,22 +187,42 @@ def normalize_offer_detail(data: dict[str, Any]) -> dict[str, Any]:
     offer = first_value(payload, "offer") if isinstance(first_value(payload, "offer"), dict) else payload
     fare_details = first_value(offer, "fare_details", "fareDetails") or {}
     rules = fare_details.get("rules", {})
-    rule_refund = rules.get("refund")
-    rule_change = rules.get("change")
-
     baggage_allowance = first_value(offer, "baggage_allowance", "baggageAllowance") or {}
     conditions = first_value(offer, "conditions") or {}
+    payment_requirements = first_value(offer, "payment_requirements", "paymentRequirements") or {}
     created_at = normalize_datetime(first_value(offer, "created_at", "createdAt", "created"))
     expires_at = normalize_datetime(first_value(offer, "expires_at", "expiresAt", "expiry_at", "expiryAt"))
 
     return {
-        "data": {
-            "policy": {
-                "refund": rule_refund,
-                "change": rule_change,
+        "offer": {
+            "offer_id": first_value(offer, "offer_id", "offerId", "id"),
+            "status": first_value(offer, "status"),
+            "status_code": first_value(offer, "status_code", "StatusCode"),
+            "fare": {
+                "family": first_value(fare_details, "fare_family", "fareFamily"),
+                "code": first_value(fare_details, "code", "fare_code", "FareFamily"),
             },
-            "baggage_allowance": baggage_allowance,
-            "conditions": conditions,
+            "policy": {
+                "refund": _normalize_policy_rule(rules.get("refund")),
+                "change": _normalize_policy_rule(rules.get("change")),
+                "no_show": _normalize_policy_rule(rules.get("no_show")),
+            },
+            "baggage": {
+                "checked": _normalize_offer_baggage_piece(first_value(baggage_allowance, "checked")),
+                "carry_on": _normalize_offer_baggage_piece(first_value(baggage_allowance, "carry_on")),
+            },
+            "conditions": {
+                "advance_purchase_days": _to_int(first_value(conditions, "advance_purchase_days")),
+                "min_stay_days": _to_int(first_value(conditions, "min_stay_days")),
+                "max_stay_days": _to_int(first_value(conditions, "max_stay_days")),
+            },
+            "payment_requirements": {
+                "accepted_methods": _normalize_string_list(first_value(payment_requirements, "accepted_methods")),
+                "time_limit": normalize_datetime(first_value(payment_requirements, "time_limit")),
+                "instant_ticketing_required": _to_bool(
+                    first_value(payment_requirements, "instant_ticketing_required")
+                ),
+            },
             "created_at": created_at,
             "expires_at": expires_at,
         }
@@ -229,16 +250,37 @@ def normalize_booking(data: dict[str, Any],
                 "email": contact.get("email"),
                 "phone": contact.get("phone")
             },
-
-            "passengers": passengers,
-
             "ticketing": {
                 "status": ticketing.get("status"),
                 "time_limit": normalize_datetime(ticketing.get("time_limit")),
                 "ticket_numbers": ticketing.get("ticket_numbers"),
             }
-        }
+        },
+        "passengers": passengers,
     }
+
+
+def build_booking_detail_response(
+    *,
+    booking_reference: str | None,
+    trip_type: str | None,
+    outbound: dict[str, Any],
+    inbound: dict[str, Any] | None,
+) -> dict[str, Any]:
+    passengers = _extract_booking_passengers(outbound, inbound)
+    return {
+        "booking_reference": booking_reference,
+        "trip_type": trip_type,
+        "passengers": passengers,
+        "outbound": outbound,
+        "inbound": inbound,
+    }
+
+
+def _extract_booking_passengers(outbound: dict[str, Any], inbound: dict[str, Any] | None) -> list[dict[str, Any]]:
+    outbound_passengers = outbound.pop("passengers", []) if isinstance(outbound, dict) else []
+    inbound_passengers = inbound.pop("passengers", []) if isinstance(inbound, dict) else []
+    return outbound_passengers or inbound_passengers
 
 
 def unwrap_data(data: Any) -> dict[str, Any]:
@@ -267,6 +309,15 @@ def _to_int(value: Any) -> int | None:
     try:
         return int(value)
     except (TypeError, ValueError):
+        return None
+
+
+def _to_float(value: Any) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        return float(Decimal(str(value)).quantize(Decimal("0.01")))
+    except (InvalidOperation, ValueError, TypeError):
         return None
 
 
@@ -319,6 +370,71 @@ def _to_bool(value: Any) -> bool | None:
         return bool(value)
     return None
 
+def _normalize_policy_rule(data: Any) -> dict[str, Any] | None:
+    if not isinstance(data, dict):
+        return None
+
+    normalized: dict[str, Any] = {}
+    allowed = _to_bool(first_value(data, "allowed"))
+    if allowed is not None:
+        normalized["allowed"] = allowed
+
+    penalty = _normalize_penalty(first_value(data, "penalty"))
+    if penalty is not None:
+        normalized["penalty"] = penalty
+
+    return normalized or None
+
+
+def _normalize_penalty(data: Any) -> dict[str, Any] | None:
+    if not isinstance(data, dict):
+        return None
+
+    amount = _to_float(first_value(data, "amount"))
+    currency = first_value(data, "currency", "currency_code", "CurrencyCode")
+    if amount is None and currency is None:
+        return None
+    return {
+        "amount": amount,
+        "currency": currency,
+    }
+
+
+def _normalize_offer_baggage_piece(data: Any) -> dict[str, Any] | None:
+    if not isinstance(data, dict):
+        return None
+
+    quantity = _to_int(first_value(data, "quantity", "pieces"))
+    max_weight_kg = _to_int(first_value(data, "max_weight_kg", "weight_kg"))
+    if max_weight_kg in (None, 0):
+        max_weight_kg = _parse_weight_kg(first_value(data, "MaxWeight", "max_weight"))
+
+    if quantity is None and max_weight_kg is None:
+        return None
+
+    return {
+        "quantity": quantity,
+        "max_weight_kg": max_weight_kg,
+    }
+
+
+def _parse_weight_kg(value: Any) -> int | None:
+    if value in (None, ""):
+        return None
+    if isinstance(value, (int, float)):
+        return _to_int(value)
+
+    match = re.search(r"(\d+)", str(value))
+    if not match:
+        return None
+    return _to_int(match.group(1))
+
+
+def _normalize_string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
+
 def _get_path(data: Any, path: str) -> Any:
     current = data
     for part in path.split("."):
@@ -334,7 +450,7 @@ def mapping_passengers(passengers: list) -> list:
                     "pax_id": passenger.get("pax_id"),
                     "type": passenger.get("type"),
                     "first_name": passenger.get("first_name"),
-                    "last_name": passenger.get("first_name"),
+                    "last_name": passenger.get("last_name"),
                     "name": passenger.get("name"),
                     "title": passenger.get("title"),
                     "dob": passenger.get("dob"),
