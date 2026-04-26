@@ -3,6 +3,7 @@ from fastapi import Request
 from app.application.use_cases.create_booking import CreateBooking
 from app.infrastructure.config.settings import get_settings
 from app.application.use_cases.get_booking import GetBooking
+from app.application.use_cases.list_bookings import ListBookings
 from app.application.use_cases.get_offer_detail import GetOfferDetail
 from app.application.use_cases.list_flights import ListFlights
 from app.infrastructure.cache.booking_rate_limit import BookingCreateRateLimiter
@@ -44,3 +45,8 @@ def get_booking_use_case(request: Request) -> GetBooking:
         booking_repository=booking_repository,
         cache_ttl_seconds=settings.booking_cache_ttl_seconds,
     )
+
+
+def get_list_bookings_use_case(request: Request) -> ListBookings:
+    booking_repository = SqlAlchemyBookingRepository(postgres=request.app.state.postgres)
+    return ListBookings(booking_repository=booking_repository)
