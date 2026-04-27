@@ -55,6 +55,9 @@ ERROR_CODES: dict[str, str] = {
     "flight_destination_invalid_airport": "FLIGHT_DESTINATION_INVALID_AIRPORT",
     "departure_date_invalid": "DEPARTURE_DATE_INVALID",
     "return_date_invalid": "RETURN_DATE_INVALID",
+    "departure_date_before_today": "DEPARTURE_DATE_BEFORE_TODAY",
+    "return_date_before_today": "RETURN_DATE_BEFORE_TODAY",
+    "departure_date_after_return_date": "DEPARTURE_DATE_AFTER_RETURN_DATE",
 
     # Upstream errors
     "upstream_timeout": "UPSTREAM_TIMEOUT",

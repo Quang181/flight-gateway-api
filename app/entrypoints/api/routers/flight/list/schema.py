@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.application.common.constant import DATE_YYYY_MM_DD_REGEX
 from app.entrypoints.api.errors.exceptions import AppValidationError
@@ -29,6 +29,32 @@ class FlightListQuery(BaseModel):
     @classmethod
     def validate_return_date(cls, value: str) -> str:
         return _validate_iso_date(value, message_key="return_date_invalid", code="RETURN_DATE_INVALID")
+
+    @model_validator(mode="after")
+    def validate_date_range(self) -> "FlightListQuery":
+        today = _utc_today()
+        departure_date = date.fromisoformat(self.departure_date)
+        return_date = date.fromisoformat(self.return_date)
+
+        if departure_date < today:
+            raise AppValidationError(
+                message_key="departure_date_before_today",
+                code="DEPARTURE_DATE_BEFORE_TODAY",
+            )
+
+        if return_date < today:
+            raise AppValidationError(
+                message_key="return_date_before_today",
+                code="RETURN_DATE_BEFORE_TODAY",
+            )
+
+        if departure_date > return_date:
+            raise AppValidationError(
+                message_key="departure_date_after_return_date",
+                code="DEPARTURE_DATE_AFTER_RETURN_DATE",
+            )
+
+        return self
 
 
 class FlightPriceResponse(BaseModel):
@@ -101,3 +127,7 @@ def _validate_iso_date(value: str, *, message_key: str, code: str) -> str:
     except ValueError as exc:
         raise AppValidationError(message_key=message_key, code=code) from exc
     return parsed.isoformat()
+
+
+def _utc_today() -> date:
+    return date.today()

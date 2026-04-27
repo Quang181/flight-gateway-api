@@ -1,4 +1,6 @@
 import pytest
+from unittest.mock import patch
+from datetime import date
 
 from app.entrypoints.api.errors.exceptions import AppValidationError
 from app.entrypoints.api.routers.flight.list.schema import FlightListQuery, FlightListResponse
@@ -83,3 +85,54 @@ def test_flight_list_query_rejects_invalid_return_date() -> None:
 
     assert exc_info.value.code == "RETURN_DATE_INVALID"
     assert exc_info.value.message_key == "return_date_invalid"
+
+
+def test_flight_list_query_rejects_departure_date_before_current_utc_date() -> None:
+    with patch("app.entrypoints.api.routers.flight.list.schema._utc_today", return_value=date(2026, 4, 27)):
+        with pytest.raises(AppValidationError) as exc_info:
+            FlightListQuery.model_validate(
+                {
+                    "origin": "HAN",
+                    "destination": "KUL",
+                    "departure_date": "2026-04-26",
+                    "return_date": "2026-04-28",
+                    "pax_count": 1,
+                }
+            )
+
+    assert exc_info.value.code == "DEPARTURE_DATE_BEFORE_TODAY"
+    assert exc_info.value.message_key == "departure_date_before_today"
+
+
+def test_flight_list_query_rejects_return_date_before_current_utc_date() -> None:
+    with patch("app.entrypoints.api.routers.flight.list.schema._utc_today", return_value=date(2026, 4, 27)):
+        with pytest.raises(AppValidationError) as exc_info:
+            FlightListQuery.model_validate(
+                {
+                    "origin": "HAN",
+                    "destination": "KUL",
+                    "departure_date": "2026-04-27",
+                    "return_date": "2026-04-26",
+                    "pax_count": 1,
+                }
+            )
+
+    assert exc_info.value.code == "RETURN_DATE_BEFORE_TODAY"
+    assert exc_info.value.message_key == "return_date_before_today"
+
+
+def test_flight_list_query_rejects_departure_date_after_return_date() -> None:
+    with patch("app.entrypoints.api.routers.flight.list.schema._utc_today", return_value=date(2026, 4, 20)):
+        with pytest.raises(AppValidationError) as exc_info:
+            FlightListQuery.model_validate(
+                {
+                    "origin": "HAN",
+                    "destination": "KUL",
+                    "departure_date": "2026-04-29",
+                    "return_date": "2026-04-28",
+                    "pax_count": 1,
+                }
+            )
+
+    assert exc_info.value.code == "DEPARTURE_DATE_AFTER_RETURN_DATE"
+    assert exc_info.value.message_key == "departure_date_after_return_date"
